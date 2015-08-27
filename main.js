@@ -74,7 +74,11 @@ var Sphere = function(pos, radius, myColor){
 
 Sphere.prototype.preDraw = function(camerapos, cameraRotation, screenwidth, screenheight){
 	this.projectedPos = cameraRotation.qMul((this.pos.sub(camerapos)).qMul(cameraRotation.inverse()));
+	this.shouldDraw = this.projectedPos.z>0;
 	this.distanceFromCamera = this.projectedPos.z;
+	if (!this.shouldDraw){
+		return;	//why waste time if we ain't gonna draw this
+	}
 	this.drawRadius = this.radius/this.distanceFromCamera;
 	var temp = this.projectedPos.getScreenPos(screenwidth, screenheight);
 	this.drawX = temp[0];
@@ -82,37 +86,83 @@ Sphere.prototype.preDraw = function(camerapos, cameraRotation, screenwidth, scre
 };
 
 Sphere.prototype.draw = function(canvasContext){
-	canvasContext.beginPath();
-	canvasContext.arc(this.drawX, this.drawY, this.drawRadius, 0, 2*Math.PI, false);
-	//console.log(this.drawX);
-	//console.log(this.drawY);
-	canvasContext.fillStyle = this.myColor;
-	canvasContext.fill();
+	if (this.shouldDraw){
+		canvasContext.beginPath();
+		canvasContext.arc(this.drawX, this.drawY, this.drawRadius, 0, 2*Math.PI, false);
+		//console.log(this.drawX);
+		//console.log(this.drawY);
+		canvasContext.fillStyle = this.myColor;
+		canvasContext.fill();
+	}
+};
+
+var update = function(){
+	//cameraVel = cameraVel.add(cameraRotation.inverse().qMul(Quaternion(0,0,0,0.01).mul()))
+	cameraPos = cameraPos.add(cameraVel)
+}
+
+var render = function(){
+	for (i=0; i<objects.length; i++){
+		objects[i].preDraw(cameraPos, cameraRotation, canvas.width, canvas.height);
+	}
+
+	//canvasContext.fillStyle="white";
+	//canvasContext.fill()
+	canvasContext.clearRect(0,0,canvas.width,canvas.height)
+
+	objects.sort(function (a,b){return b.projectedPos.z-a.projectedPos.z;});
+	for (i=0; i<objects.length; i++){
+		objects[i].draw(canvasContext);
+	}
+}
+
+var mouseDownListener = function(e){
+	mouseDown=true;
+};
+
+var mouseUpListener = function(e){
+	mouseDown=false;
+};
+
+var mouseMoveListener = function(e){
+	if (mouseDown){
+		var dMouseX = e.pageX-oldMouseX;
+		var dMouseY = e.pageY-oldMouseY;
+
+		tempRotation = new Quaternion (1, 0.001*dMouseY, -0.001*dMouseX, 0).normalize();
+		cameraRotation = tempRotation.qMul(cameraRotation)
+	}
+
+	oldMouseX=e.pageX;
+	oldMouseY=e.pageY;
 };
 
 var fov = 90;
 var ratio = Math.tan(fov/2.0);
 
+var mouseDown=false;
+var oldMouseX=0
+var oldMouseY=0
+
 var cameraPos = new Quaternion(0,0,0,0);
-var camerVel = new Quaternion(0,0,0,0);
+var cameraVel = new Quaternion(0,0.01,0,0);
 var cameraRotation = new Quaternion(1,0,0,0);
 cameraRotation.normalize();
 var tempRotation = new Quaternion(0,0,0,0);
 
-var objects=[];
-for (var i=0; i<1000; i++){
-	objects.push(new Sphere(new Quaternion(0,(Math.random()-0.5)*10,(Math.random()-0.5)*10, Math.random()*10), 100, getRandomColor()));
-}
-
 var canvas = document.getElementById("myCanvas");
 var canvasContext = canvas.getContext("2d");
 
-objects.sort(function (a,b){return b.pos.z-a.pos.z;});
+canvas.addEventListener("mousedown", mouseDownListener, false);
+canvas.addEventListener("mousemove", mouseMoveListener, false);
+canvas.addEventListener("mouseup", mouseUpListener, false);
 
-for (i=0; i<objects.length; i++){
-	objects[i].preDraw(cameraPos, cameraRotation, canvas.width, canvas.height);
+var objects=[];
+for (var i=0; i<500; i++){
+	objects.push(new Sphere(new Quaternion(0,(Math.random()-0.5)*10,(Math.random()-0.5)*10, Math.random()*10), 100, getRandomColor()));
 }
 
-for (i=0; i<objects.length; i++){
-	objects[i].draw(canvasContext);
-}
+render()
+
+var updating = window.setInterval(update, 17)
+var rendering = window.setInterval(render, 17)
