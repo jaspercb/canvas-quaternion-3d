@@ -189,14 +189,13 @@ Sphere.prototype.preDraw = function(camera, screenwidth, screenheight){
 	this.projectedPos = this.path.getPos().sub(camera.pos).applyRotation(camera.orientation);
 	this.shouldDraw = this.projectedPos.z>0;
 	this.distanceFromCamera = this.projectedPos.z;
-	if (!this.shouldDraw){
-		return;	//why waste time if we ain't gonna draw this
+	if (this.shouldDraw){ //why waste time if we ain't gonna draw this
+		this.drawRadius = Number(camera.ratio*(screenwidth/2.0)*this.radius/this.distanceFromCamera);
+		
+		temp = this.projectedPos.getScreenPos(camera, screenwidth, screenheight);
+		this.drawX = temp[0];
+		this.drawY = temp[1];
 	}
-	this.drawRadius = Number(camera.ratio*(screenwidth/2.0)*this.radius/this.distanceFromCamera);
-	
-	temp = this.projectedPos.getScreenPos(camera, screenwidth, screenheight);
-	this.drawX = temp[0];
-	this.drawY = temp[1];
 };
 
 Sphere.prototype.draw = function(canvasContext){
@@ -239,11 +238,17 @@ var mouseMoveListener = function(e){
 	if (mouseDown){
 		var dMouseX = e.pageX-oldMouseX;
 		var dMouseY = e.pageY-oldMouseY;
-
-		//camera.rotateAroundDistance(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), cameraDistance)
-		//camera.rotateOrientation(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize())
-		//camera.rotateAroundPoint(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), new Quaternion(0,5,5,5))
-		camera.rotateAroundDistance(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), cameraDistance);
+		if (e.shiftKey){
+			tmp = new Quaternion(0, -0.001*dMouseX*cameraDistance, -0.001*dMouseY*cameraDistance, 0).applyRotation(camera.orientation.inverse());
+			console.log(tmp);
+			camera.pos = camera.pos.add(tmp);
+		}
+		else{
+			//camera.rotateAroundDistance(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), cameraDistance)
+			//camera.rotateOrientation(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize())
+			//camera.rotateAroundPoint(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), new Quaternion(0,5,5,5))
+			camera.rotateAroundDistance(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), cameraDistance);
+		}
 	}
 
 	oldMouseX=e.pageX;
