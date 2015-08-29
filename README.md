@@ -15,6 +15,7 @@ Shift-click and drag to move camera up, down, left and right
 
 ###3D Functionality
 Uniform spheres
+
 Spheres can follow paths - orbiting a fixed point or another path (epicycles)
 
 ##Unimplemented features that will probably make it in eventually
