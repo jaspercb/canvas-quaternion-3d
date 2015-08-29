@@ -63,7 +63,6 @@ Quaternion.prototype.getScreenPos = function(camera, screenwidth, screenheight){
 	}
 	return [camera.ratio*(screenwidth/2.0)*this.x/this.z + (screenwidth/2.0),
 			camera.ratio*(screenwidth/2.0)*this.y/this.z + (screenheight/2.0)];
-
 };
 
 Quaternion.prototype.real = function(){
@@ -75,12 +74,6 @@ Quaternion.prototype.real = function(){
 Quaternion.prototype.log = function(){
 	console.log("w:",this.w,"x:",this.x,"y:",this.y,"z:",this.z)
 }
-
-var Sphere = function(pos, radius, myColor){
-	this.pos=pos;
-	this.radius=radius;
-	this.myColor=myColor;
-};
 
 Quaternion.prototype.applyRotation = function(rotation){
 	//
@@ -155,8 +148,45 @@ Camera.prototype.renderObjects = function(objects, canvas){
 		}
 }
 
+var OrbitPath = function(center, orbitOffset, rotation){
+	this.center=center; // path representing center of orbit
+	this.orbitOffset=orbitOffset;	// imaginary quaternion representing the displacement from the center of the orbit
+	this.rotation=rotation;	// quaternion representing the rotation applied to the offset per tick;
+	this.displacement = new Quaternion(0,0,0,0)
+}
+
+OrbitPath.prototype.update = function(){
+	this.orbitOffset = this.orbitOffset.applyRotation(this.rotation);
+	this.center.update();
+}
+
+OrbitPath.prototype.getPos = function(){
+	return this.center.getPos().add(this.orbitOffset).add(this.displacement);
+}
+
+var ConstantPath = function(pos){
+	this.pos = pos;
+	this.displacement = new Quaternion(0,0,0,0);
+};
+
+ConstantPath.prototype.getPos = function(){
+	return this.pos.add(this.displacement);
+};
+
+ConstantPath.prototype.update = function(){}
+
+var Sphere = function(path, radius, myColor){
+	this.path=path;
+	this.radius=radius;
+	this.myColor=myColor;
+};
+
+Sphere.prototype.update = function(){
+	this.path.update();
+}
+
 Sphere.prototype.preDraw = function(camera, screenwidth, screenheight){
-	this.projectedPos = this.pos.sub(camera.pos).applyRotation(camera.orientation);
+	this.projectedPos = this.path.getPos().sub(camera.pos).applyRotation(camera.orientation);
 	this.shouldDraw = this.projectedPos.z>0;
 	this.distanceFromCamera = this.projectedPos.z;
 	if (!this.shouldDraw){
@@ -180,12 +210,15 @@ Sphere.prototype.draw = function(canvasContext){
 	}
 };
 
-var update = function(){
+var updateAll = function(){
+	for (var i=0; i<objects.length; i++){
+		objects[i].update();
+	}
 	//cameraVel = cameraVel.add(cameraRotation.inverse().qMul(Quaternion(0,0,0,0.01).mul()))
 	//camera.pos = camera.pos.add( camera.orientation.inverse().qMul(new Quaternion(0,0,0,1).qMul(camera.orientation)).mul(0.01) )
 }
 
-var render = function(){
+var renderAll = function(){
 	camera.renderObjects(objects, canvas);
 }
 
@@ -241,25 +274,44 @@ canvas.addEventListener("mouseup", mouseUpListener, false);
 canvas.addEventListener("mousewheel", mouseScrollListener, false);
 
 var objects=[];
-for (var i=0; i<2000; i++){
-	objects.push(new Sphere(new Quaternion(0, (Math.random()-0.5)*10,(Math.random()-0.5)*10, (Math.random()-0.5)*10), 0.01, "white"));
+for (var i=0; i<200; i++){
+	objects.push(new Sphere(new ConstantPath(new Quaternion(0, (Math.random()-0.5)*10,(Math.random()-0.5)*10, (Math.random()-0.5)*10)), 0.01, "white"));
 }
 
-objects.push(new Sphere(new Quaternion(0, 0,0,0), 0.1, "yellow"));
+objects.push(new Sphere(new ConstantPath(new Quaternion(0, 0,0,0)), 0.1, "yellow"));
+
 
 for (var i=-1; i<=1; i+=2){
 	for (var j=-1; j<=1; j+=2){
 		for (var k=-1; k<=1; k+=2){
-			objects.push(new Sphere(new Quaternion(0, 5*i, 5*j, 5*k), 0.1, "red"));
-			objects.push(new Sphere(new Quaternion(0, 2.5*i, 2.5*j, 2.5*k), 0.1, "blue"));
+			objects.push(new Sphere(new ConstantPath(new Quaternion(0, 5*i, 5*j, 5*k)), 0.1, "red"));
+			objects.push(new Sphere(new ConstantPath(new Quaternion(0, 2.5*i, 2.5*j, 2.5*k)), 0.1, "blue"));
 		}
 	}
 }
 
+
+objects.push(new Sphere(new OrbitPath(new ConstantPath(new Quaternion(0,0,0,0)), new Quaternion(0,0,0,0.2), new Quaternion(60, 0, 1, 0).normalize()), 0.05, getRandomColor()));
+
+
+objects.push(new Sphere(new OrbitPath(new ConstantPath(new Quaternion(0, 0,0,0)), new Quaternion(0, 0,0,0.4), new Quaternion(80, 0, 1, 0).normalize()), 0.05, getRandomColor()));
+objects.push(new Sphere(new OrbitPath(new ConstantPath(new Quaternion(0, 0,0,0)), new Quaternion(0, 0,0,0.7), new Quaternion(120, 0, 1, 0).normalize()), 0.05, getRandomColor()));
+objects.push(new Sphere(new OrbitPath(new ConstantPath(new Quaternion(0, 0,0,0)), new Quaternion(0, 0,0,1), new Quaternion(160, 0, 1, 0).normalize()), 0.05, getRandomColor()));
+
+objects.push(new Sphere(new OrbitPath(new OrbitPath(new ConstantPath(new Quaternion(0, 0,0,0)), new Quaternion(0, 0,0,1), new Quaternion(160, 0, 1, 0).normalize()),new Quaternion(0, 0,0,0.1), new Quaternion(30, 0, 1, 0).normalize()), 0.03, "grey"));
+objects.push(new Sphere(new OrbitPath(new OrbitPath(new ConstantPath(new Quaternion(0, 0,0,0)), new Quaternion(0, 0,0,1), new Quaternion(160, 0, 1, 0).normalize()),new Quaternion(0, 0,0,0.15), new Quaternion(40, 0, 1, 0).normalize()), 0.02, "grey"));
+
+for (var i=0; i<=100; i++){
+	rotation = new Quaternion(160+Math.random()*100, 0, 1, 0).normalize();
+	theta = Math.random()*2*Math.PI;
+	distance= 1.2+Math.random()*0.4;
+	objects.push(new Sphere(new OrbitPath(new ConstantPath(new Quaternion(0, 0,0,0)), new Quaternion(0, distance*Math.cos(theta), (Math.random()-0.5)*0.2, distance*Math.sin(theta)), rotation), 0.01, "white"));
+}
+
 //for (var x=0; x<10; x++){ for (var y=0; y<10; y++){ for (var z=0; z<10; z++){ 	objects.push(new Sphere(new Quaternion(0, x,y,z), 0.1, getRandomColor())); }}}
 
-render();
+renderAll();
 
-var updating = window.setInterval(update, 17);
-var rendering = window.setInterval(render, 17);
-var loggingState = window.setInterval(logState, 500)
+var updating = window.setInterval(updateAll, 17);
+var rendering = window.setInterval(renderAll, 17);
+//var loggingState = window.setInterval(logState, 500)
