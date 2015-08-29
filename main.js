@@ -48,7 +48,7 @@ Quaternion.prototype.setSize = function(size){
 };
 
 Quaternion.prototype.inverse = function(){
-	var size = this.getSize();
+	size = this.getSize();
 	return new Quaternion(this.w/size, -this.x/size, -this.y/size, -this.z/size);
 };
 
@@ -57,12 +57,12 @@ Quaternion.prototype.normalize = function(){
 	return this;
 };
 
-Quaternion.prototype.getScreenPos = function(screenwidth, screenheight){
+Quaternion.prototype.getScreenPos = function(camera, screenwidth, screenheight){
 	if (this.z===0){
 		return [-10000,-10000];
 	}
-	return [ratio*(screenwidth/2.0)*this.x/this.z + (screenwidth/2.0),
-			ratio*(screenheight/2.0)*this.y/this.z + (screenheight/2.0)];
+	return [camera.ratio*(screenwidth/2.0)*this.x/this.z + (screenwidth/2.0),
+			camera.ratio*(screenwidth/2.0)*this.y/this.z + (screenheight/2.0)];
 
 };
 
@@ -72,21 +72,99 @@ Quaternion.prototype.real = function(){
 	return new Quaternion(0.0, self.x, self.y, self.z).normalize();
 }
 
+Quaternion.prototype.log = function(){
+	console.log("w:",this.w,"x:",this.x,"y:",this.y,"z:",this.z)
+}
+
 var Sphere = function(pos, radius, myColor){
 	this.pos=pos;
 	this.radius=radius;
 	this.myColor=myColor;
 };
 
-Sphere.prototype.preDraw = function(camerapos, cameraRotation, screenwidth, screenheight){
-	this.projectedPos = cameraRotation.qMul((this.pos.sub(camerapos)).qMul(cameraRotation.inverse()));
+Quaternion.prototype.applyRotation = function(rotation){
+	//
+	//if (this.w!=0){
+	//	throw "attempted to apply rotation to quaternion with real part"
+	//}
+	return rotation.qMul(this.qMul(rotation.inverse()))
+}
+
+var Camera = function(pos, orientation, vel){
+	this.pos = pos;
+	this.orientation = orientation;
+	this.vel = vel;
+
+	this.fov = 90;
+	this.ratio = Math.tan(this.fov/2.0);
+}
+
+Camera.prototype.rotateOrientation = function(rotation){
+	//applies rotation to current orientation quaternion
+	//rotates objectively
+	 this.orientation = rotation.qMul(this.orientation); //works
+	// works but backwards this.orientation = rotation.qMul(this.orientation); //works but backwards
+
+	//this.orientation = this.orientation.applyRotation(rotation) //works but fast
+}
+
+Camera.prototype.rotateAroundPoint = function(rotation, point){
+	//rotates camera position and perspective around a fixed point
+	//currently does not actually work
+
+	this.pos = this.pos.sub(point);
+	//this.pos = this.pos.applyRotation(this.orientation.inverse());
+	this.rotateOrientation(rotation.inverse());
+	this.pos = this.pos.applyRotation(rotation.inverse());
+	//this.pos = this.pos.applyRotation(this.orientation);
+	this.pos = this.pos.add(point);
+}
+
+Camera.prototype.rotateAroundDistance = function(rotation, distance){
+	//moves camera forwards by distance, rotates, moves camera backwards by amount
+	//net effect, the camera seems to orbit around a point distance away
+	this.pos = this.pos.add(this.orientation.inverse().qMul(new Quaternion(0,0,0,1).qMul(this.orientation)).mul(distance));
+	this.orientation = rotation.qMul(this.orientation);
+	this.pos = this.pos.sub(this.orientation.inverse().qMul(new Quaternion(0,0,0,1).qMul(this.orientation)).mul(distance));
+}
+
+/*Camera.prototype.rotateAroundDistance = function(rotation, distance){
+	this.rotateAroundPoint(rotation, this.pos.add(new Quaternion(0,0,0,1).mul(distance)));
+} */
+
+Camera.prototype.renderObjects = function(objects, canvas){
+	for (i=0; i<objects.length; i++){
+			objects[i].preDraw(this, canvas.width, canvas.height);
+			//console.log(objects[i].projectedPos.w)
+
+		}
+
+		//canvasContext.fillStyle="white";
+		//canvasContext.fill()
+
+		canvasContext = canvas.getContext("2d")
+
+		canvasContext.clearRect(0,0,canvas.width,canvas.height)
+		canvasContext.fillStyle="black";
+		canvasContext.fillRect(0,0,canvas.width,canvas.height);
+
+
+		objects.sort(function (a,b){return b.projectedPos.z-a.projectedPos.z;});
+		for (i=0; i<objects.length; i++){
+			objects[i].draw(canvasContext);
+		}
+}
+
+Sphere.prototype.preDraw = function(camera, screenwidth, screenheight){
+	this.projectedPos = this.pos.sub(camera.pos).applyRotation(camera.orientation);
 	this.shouldDraw = this.projectedPos.z>0;
 	this.distanceFromCamera = this.projectedPos.z;
 	if (!this.shouldDraw){
 		return;	//why waste time if we ain't gonna draw this
 	}
-	this.drawRadius = this.radius/this.distanceFromCamera;
-	var temp = this.projectedPos.getScreenPos(screenwidth, screenheight);
+	this.drawRadius = Number(camera.ratio*(screenwidth/2.0)*this.radius/this.distanceFromCamera);
+	
+	temp = this.projectedPos.getScreenPos(camera, screenwidth, screenheight);
 	this.drawX = temp[0];
 	this.drawY = temp[1];
 };
@@ -104,22 +182,16 @@ Sphere.prototype.draw = function(canvasContext){
 
 var update = function(){
 	//cameraVel = cameraVel.add(cameraRotation.inverse().qMul(Quaternion(0,0,0,0.01).mul()))
-	//cameraPos = cameraPos.add( cameraRotation.inverse().qMul(new Quaternion(0,0,0,1).qMul(cameraRotation)).mul(0.01) )
+	//camera.pos = camera.pos.add( camera.orientation.inverse().qMul(new Quaternion(0,0,0,1).qMul(camera.orientation)).mul(0.01) )
 }
 
 var render = function(){
-	for (i=0; i<objects.length; i++){
-		objects[i].preDraw(cameraPos, cameraRotation, canvas.width, canvas.height);
-	}
+	camera.renderObjects(objects, canvas);
+}
 
-	//canvasContext.fillStyle="white";
-	//canvasContext.fill()
-	canvasContext.clearRect(0,0,canvas.width,canvas.height)
-
-	objects.sort(function (a,b){return b.projectedPos.z-a.projectedPos.z;});
-	for (i=0; i<objects.length; i++){
-		objects[i].draw(canvasContext);
-	}
+var logState = function(){
+	//camera.pos.log()
+	camera.pos.add(new Quaternion(0,0,0,1).applyRotation(camera.orientation.inverse()).mul(cameraDistance)).log()
 }
 
 var mouseDownListener = function(e){
@@ -135,10 +207,10 @@ var mouseMoveListener = function(e){
 		var dMouseX = e.pageX-oldMouseX;
 		var dMouseY = e.pageY-oldMouseY;
 
-		cameraPos = cameraPos.add( cameraRotation.inverse().qMul(new Quaternion(0,0,0,1).qMul(cameraRotation)).mul(cameraDistance))
-		tempRotation = new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize();
-		cameraRotation = tempRotation.qMul(cameraRotation)
-		cameraPos = cameraPos.add( cameraRotation.inverse().qMul(new Quaternion(0,0,0,1).qMul(cameraRotation)).mul(-cameraDistance))
+		//camera.rotateAroundDistance(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), cameraDistance)
+		//camera.rotateOrientation(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize())
+		//camera.rotateAroundPoint(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), new Quaternion(0,5,5,5))
+		camera.rotateAroundDistance(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), cameraDistance);
 	}
 
 	oldMouseX=e.pageX;
@@ -148,23 +220,17 @@ var mouseMoveListener = function(e){
 var mouseScrollListener = function(e){
 	oldCameraDistance = cameraDistance;
 	cameraDistance*=Math.pow(0.9997,e.wheelDelta);
-	cameraPos = cameraPos.add( cameraRotation.inverse().qMul(new Quaternion(0,0,0,1).qMul(cameraRotation)).mul(oldCameraDistance-cameraDistance));
+	camera.pos = camera.pos.add( new Quaternion(0,0,0,1).applyRotation(camera.orientation.inverse()).mul(oldCameraDistance-cameraDistance));
 }
-
-var fov = 90;
-var ratio = Math.tan(fov/2.0);
 
 var mouseDown=false;
 var oldMouseX=0
 var oldMouseY=0
 
-var cameraPos = new Quaternion(0,0,0,0);
-var cameraVel = new Quaternion(0,0,0,0);
-var cameraDistance = 4.0
+var camera = new Camera(new Quaternion(0,0,0,-5), new Quaternion(1,0,0,0), new Quaternion(0,0,0,0))
+var cameraDistance = 5.0
 
-var cameraRotation = new Quaternion(1,1,1,1).normalize();
-cameraRotation.normalize();
-var tempRotation = new Quaternion(0,0,0,0);
+//tempRotation = new Quaternion(0,0,0,0);
 
 var canvas = document.getElementById("myCanvas");
 var canvasContext = canvas.getContext("2d");
@@ -175,11 +241,25 @@ canvas.addEventListener("mouseup", mouseUpListener, false);
 canvas.addEventListener("mousewheel", mouseScrollListener, false);
 
 var objects=[];
-for (var i=0; i<500; i++){
-	objects.push(new Sphere(new Quaternion(0,(Math.random()-0.5)*10,(Math.random()-0.5)*10, Math.random()*10), 100, getRandomColor()));
+for (var i=0; i<2000; i++){
+	objects.push(new Sphere(new Quaternion(0, (Math.random()-0.5)*10,(Math.random()-0.5)*10, (Math.random()-0.5)*10), 0.01, "white"));
 }
 
-render()
+objects.push(new Sphere(new Quaternion(0, 0,0,0), 0.1, "yellow"));
 
-var updating = window.setInterval(update, 17)
-var rendering = window.setInterval(render, 17)
+for (var i=-1; i<=1; i+=2){
+	for (var j=-1; j<=1; j+=2){
+		for (var k=-1; k<=1; k+=2){
+			objects.push(new Sphere(new Quaternion(0, 5*i, 5*j, 5*k), 0.1, "red"));
+			objects.push(new Sphere(new Quaternion(0, 2.5*i, 2.5*j, 2.5*k), 0.1, "blue"));
+		}
+	}
+}
+
+//for (var x=0; x<10; x++){ for (var y=0; y<10; y++){ for (var z=0; z<10; z++){ 	objects.push(new Sphere(new Quaternion(0, x,y,z), 0.1, getRandomColor())); }}}
+
+render();
+
+var updating = window.setInterval(update, 17);
+var rendering = window.setInterval(render, 17);
+var loggingState = window.setInterval(logState, 500)
