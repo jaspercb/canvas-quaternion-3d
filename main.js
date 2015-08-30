@@ -142,7 +142,7 @@ Camera.prototype.renderObjects = function(objects, canvas){
 		canvasContext.fillRect(0,0,canvas.width,canvas.height);
 
 
-		objects.sort(function (a,b){return b.projectedPos.z-a.projectedPos.z;});
+		objects.sort(function (a,b){return b.distanceFromCamera-a.distanceFromCamera;});
 		for (i=0; i<objects.length; i++){
 			objects[i].draw(canvasContext);
 		}
@@ -209,6 +209,60 @@ Sphere.prototype.draw = function(canvasContext){
 	}
 };
 
+var Line = function(path1, path2, myColor, thickness){
+	this.path1 = path1;
+	this.path2 = path2;
+	this.myColor = myColor;
+	this.thickness = thickness;
+};
+
+Line.prototype.update = function(){
+	this.path1.update();
+	this.path2.update();
+}
+
+Line.prototype.preDraw = function(camera, screenwidth, screenheight){
+	this.projectedPos1 = this.path1.getPos().sub(camera.pos).applyRotation(camera.orientation);
+	this.projectedPos2 = this.path2.getPos().sub(camera.pos).applyRotation(camera.orientation);
+
+	this.shouldDraw = (this.projectedPos1.z>0) || (this.projectedPos2.z>0);
+	
+
+	if (this.shouldDraw){ //why waste time if we ain't gonna draw this
+		this.distanceFromCamera = (this.projectedPos1.z+this.projectedPos2.z)/2; //yolo average
+		this.projectedPos1 = ClipLineToPositive(this.projectedPos1, this.projectedPos2);
+		this.projectedPos2 = ClipLineToPositive(this.projectedPos2, this.projectedPos1);
+		temp = this.projectedPos1.getScreenPos(camera, screenwidth, screenheight);
+		this.draw1X = temp[0];
+		this.draw1Y = temp[1];
+		temp = this.projectedPos2.getScreenPos(camera, screenwidth, screenheight);
+		this.draw2X = temp[0];
+		this.draw2Y = temp[1];
+	}
+};
+
+Line.prototype.draw = function(canvasContext){
+	if (this.shouldDraw){
+		canvasContext.beginPath();
+		canvasContext.moveTo(this.draw1X, this.draw1Y);
+		canvasContext.lineTo(this.draw2X, this.draw2Y);
+		canvasContext.lineWidth = this.thickness;
+		canvasContext.strokeStyle = this.myColor;
+		canvasContext.stroke();
+	}
+};
+
+var ClipLineToPositive = function(A, B){
+	// A and B are both Quaternion objects
+	// if A is z-positive, returns A
+	// if A is z-negative, returns a point on the line connecting A and B which is just in front of the camera
+	if (A.z>0) 
+		return A;
+	else {
+		return A.add((B.sub(A)).mul((0.0001-A.z)/(B.z-A.z)));
+	}
+}
+
 var updateAll = function(){
 	for (var i=0; i<objects.length; i++){
 		objects[i].update();
@@ -222,8 +276,8 @@ var renderAll = function(){
 }
 
 var logState = function(){
-	//camera.pos.log()
-	camera.pos.add(new Quaternion(0,0,0,1).applyRotation(camera.orientation.inverse()).mul(cameraDistance)).log()
+	console.log(linetest)
+	//camera.pos.add(new Quaternion(0,0,0,1).applyRotation(camera.orientation.inverse()).mul(cameraDistance)).log()
 }
 
 var mouseDownListener = function(e){
@@ -285,7 +339,7 @@ for (var i=0; i<200; i++){
 
 objects.push(new Sphere(new ConstantPath(new Quaternion(0, 0,0,0)), 0.1, "yellow"));
 
-
+/*
 for (var i=-1; i<=1; i+=2){
 	for (var j=-1; j<=1; j+=2){
 		for (var k=-1; k<=1; k+=2){
@@ -293,8 +347,51 @@ for (var i=-1; i<=1; i+=2){
 			objects.push(new Sphere(new ConstantPath(new Quaternion(0, 2.5*i, 2.5*j, 2.5*k)), 0.1, "blue"));
 		}
 	}
+}*/
+
+for (var i=-5; i<=5; i+=10){
+	for (var j=-5; j<=5; j+=10){
+		objects.push(new Line(new ConstantPath(new Quaternion(0,j,-i,i)),new ConstantPath(new Quaternion(0,j,i,i)),"red",2));
+		objects.push(new Line(new ConstantPath(new Quaternion(0,i,j,-i)),new ConstantPath(new Quaternion(0,i,j,i)),"red",2));
+		objects.push(new Line(new ConstantPath(new Quaternion(0,-i,i,j)),new ConstantPath(new Quaternion(0,i,i,j)),"red",2));
+	}
 }
 
+for (var i=-2.5; i<=2.5; i+=5){
+	for (var j=-2.5; j<=2.5; j+=5){
+		objects.push(new Line(new ConstantPath(new Quaternion(0,j,-i,i)),new ConstantPath(new Quaternion(0,j,i,i)),"blue",2));
+		objects.push(new Line(new ConstantPath(new Quaternion(0,i,j,-i)),new ConstantPath(new Quaternion(0,i,j,i)),"blue",2));
+		objects.push(new Line(new ConstantPath(new Quaternion(0,-i,i,j)),new ConstantPath(new Quaternion(0,i,i,j)),"blue",2));
+	}
+}
+
+for (var i=-4; i<=4; i+=8){
+	for (var j=-4; j<=4; j+=8){
+		objects.push(new Line(new ConstantPath(new Quaternion(0,j,-i,i)),new ConstantPath(new Quaternion(0,j,i,i)),"green",2));
+		objects.push(new Line(new ConstantPath(new Quaternion(0,i,j,-i)),new ConstantPath(new Quaternion(0,i,j,i)),"green",2));
+		objects.push(new Line(new ConstantPath(new Quaternion(0,-i,i,j)),new ConstantPath(new Quaternion(0,i,i,j)),"green",2));
+		for (var k=1; k<=3; k++){
+			objects[objects.length-k].path1.pos = objects[objects.length-k].path1.pos.applyRotation(new Quaternion(1,1,1,0).normalize());
+			objects[objects.length-k].path2.pos = objects[objects.length-k].path2.pos.applyRotation(new Quaternion(1,1,1,0).normalize());
+		}
+	}
+}
+
+for (var i=-4; i<=4; i+=8){
+	for (var j=-4; j<=4; j+=8){
+		objects.push(new Line(new ConstantPath(new Quaternion(0,j,-i,i)),new ConstantPath(new Quaternion(0,j,i,i)),"yellow",2));
+		objects.push(new Line(new ConstantPath(new Quaternion(0,i,j,-i)),new ConstantPath(new Quaternion(0,i,j,i)),"yellow",2));
+		objects.push(new Line(new ConstantPath(new Quaternion(0,-i,i,j)),new ConstantPath(new Quaternion(0,i,i,j)),"yellow",2));
+		for (var k=1; k<=3; k++){
+			objects[objects.length-k].path1.pos = objects[objects.length-k].path1.pos.applyRotation(new Quaternion(1,1,0,1).normalize());
+			objects[objects.length-k].path2.pos = objects[objects.length-k].path2.pos.applyRotation(new Quaternion(1,1,0,1).normalize());
+		}
+	}
+}
+
+//objects.push(new Line(new ConstantPath(new Quaternion(0,0,0,0)),new ConstantPath(new Quaternion(0,5,5,5)),"red",2));
+
+//objects.push(linetest);
 
 objects.push(new Sphere(new OrbitPath(new ConstantPath(new Quaternion(0,0,0,0)), new Quaternion(0,0,0,0.2), new Quaternion(60, 0, 1, 0).normalize()), 0.05, getRandomColor()));
 
@@ -310,10 +407,9 @@ for (var i=0; i<=100; i++){
 	rotation = new Quaternion(160+Math.random()*100, 0, 1, 0).normalize();
 	theta = Math.random()*2*Math.PI;
 	distance= 1.2+Math.random()*0.4;
-	objects.push(new Sphere(new OrbitPath(new ConstantPath(new Quaternion(0, 0,0,0)), new Quaternion(0, distance*Math.cos(theta), (Math.random()-0.5)*0.2, distance*Math.sin(theta)), rotation), 0.01, "white"));
+	objects.push(new Sphere(new OrbitPath(new ConstantPath(new Quaternion(0, 0,0,0)), new Quaternion(0, distance*Math.cos(theta), (Math.random()-0.5)*0.2, distance*Math.sin(theta)), rotation), 0.01, "grey"));
 }
 
-//for (var x=0; x<10; x++){ for (var y=0; y<10; y++){ for (var z=0; z<10; z++){ 	objects.push(new Sphere(new Quaternion(0, x,y,z), 0.1, getRandomColor())); }}}
 
 renderAll();
 
