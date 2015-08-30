@@ -9,10 +9,10 @@ A 3D engine that uses the 2D HTML5 canvas. More of a self-imposed challenge than
 * Shift-click and drag to move camera up, down, left and right
 * Sphere objects
 * Spheres can follow paths - orbiting a fixed point or another path (epicycles)
+* Line objects
 
 ##Unimplemented features that will probably make it in eventually
 * Render optimization when camera is not moving - only call preDraw() on objects with moving paths, use cached results otherwise
-* Lines
 * Polygons
 * Hacked-together shading using gradient that will look marginally better than no shading at all
 
