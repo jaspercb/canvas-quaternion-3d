@@ -173,7 +173,7 @@ Drawable.prototype.updateProjectedPaths = function(camera){
 Drawable.prototype.updateDrawCoords = function(camera, screenwidth, screenheight){
 	this.drawCoords = [];
 	for (var i=0; i<this.paths.length; i++){
-		this.drawCoords.push(this.projectedPaths[0].getScreenPos(camera, screenwidth, screenheight));
+		this.drawCoords.push(this.projectedPaths[i].getScreenPos(camera, screenwidth, screenheight));
 	}
 };
 
@@ -246,23 +246,17 @@ Line.prototype.preDraw = function(camera, screenwidth, screenheight) {
 	if (this.shouldDraw) { //why waste time if we ain't gonna draw this
 		this.distanceFromCamera = (this.projectedPaths[0].z + this.projectedPaths[1].z) / 2; //yolo average
 		this.projectedPaths[0] = ClipLineToPositive(this.projectedPaths[0], this.projectedPaths[1]);
-		this.projectedPos2 = ClipLineToPositive(this.projectedPaths[1], this.projectedPaths[0]);
-		var temp = this.projectedPaths[0].getScreenPos(camera, screenwidth,
-			screenheight);
-		this.draw1X = temp[0];
-		this.draw1Y = temp[1];
-		temp = this.projectedPaths[1].getScreenPos(camera, screenwidth,
-			screenheight);
-		this.draw2X = temp[0];
-		this.draw2Y = temp[1];
+		this.projectedPaths[1] = ClipLineToPositive(this.projectedPaths[1], this.projectedPaths[0]);
+		
+		this.updateDrawCoords(camera, screenwidth, screenheight);
 	}
 };
 
 Line.prototype.draw = function(canvasContext) {
 	if (this.shouldDraw) {
 		canvasContext.beginPath();
-		canvasContext.moveTo(this.draw1X, this.draw1Y);
-		canvasContext.lineTo(this.draw2X, this.draw2Y);
+		canvasContext.moveTo(this.drawCoords[0][0], this.drawCoords[0][1]);
+		canvasContext.lineTo(this.drawCoords[1][0], this.drawCoords[1][1]);
 		canvasContext.lineWidth = this.thickness;
 		canvasContext.strokeStyle = this.myColor;
 		canvasContext.stroke();
@@ -342,11 +336,11 @@ canvas.addEventListener("mousewheel", mouseScrollListener, false);
 var objects = [];
 
 //stars
-/*for (var i = 0; i < 800; i++) {
+for (var i = 0; i < 400; i++) {
 	objects.push(new Sphere(new ConstantPath(new Quaternion(0, (Math.random() -
 		0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() -
 		0.5) * 10)), 0.01, "white"));
-}*/
+}
 objects.push(new Sphere(new ConstantPath(new Quaternion(0, 0, 0, 0)),
 	0.1, "yellow"));
 /*
