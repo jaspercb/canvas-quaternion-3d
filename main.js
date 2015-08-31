@@ -1,6 +1,7 @@
-function getRandomColor() { //source: http://stackoverflow.com/questions/1484506/random-color-generator-in-javascript
+var getRandomColor = function() { //source: http://stackoverflow.com/questions/1484506/random-color-generator-in-javascript
 	return '#' + Math.random().toString(16).substr(-6);
-}
+};
+
 var Quaternion = function(w, x, y, z) {
 	this.w = w;
 	this.x = x;
@@ -71,6 +72,7 @@ Quaternion.prototype.applyRotation = function(rotation) {
 	//}
 	return rotation.qMul(this.qMul(rotation.inverse()));
 };
+
 var Camera = function(pos, orientation, vel) {
 	this.pos = pos;
 	this.orientation = orientation;
@@ -125,6 +127,7 @@ Camera.prototype.renderObjects = function(objects, canvas) {
 		objects[i].draw(canvasContext);
 	}
 };
+
 var OrbitPath = function(center, orbitOffset, rotation) {
 	this.center = center; // path representing center of orbit
 	this.orbitOffset = orbitOffset; // imaginary quaternion representing the displacement from the center of the orbit
@@ -138,6 +141,7 @@ OrbitPath.prototype.update = function() {
 OrbitPath.prototype.getPos = function() {
 	return this.center.getPos().add(this.orbitOffset).add(this.displacement);
 };
+
 var ConstantPath = function(pos) {
 	this.pos = pos;
 	this.displacement = new Quaternion(0, 0, 0, 0);
@@ -146,71 +150,114 @@ ConstantPath.prototype.getPos = function() {
 	return this.pos.add(this.displacement);
 };
 ConstantPath.prototype.update = function() {};
+
+var Drawable = function(paths){
+	/*	Parent class for anything that's drawn to the screen
+		Required properties:
+				.paths				| list of paths denoting edges
+			Updated during .update():
+				.shouldDraw			| boolean indicating whether to draw this object this frame
+				.distanceFromCamera	| float indicating the distance to use when sorting objects by distance
+				.drawCoords			| list of (x,y) pairs
+	*/
+}
+
+Drawable.prototype.updateProjectedPaths = function(camera){
+	//returns all items in this.paths, from the perspective of the camera
+	this.projectedPaths = [];
+	for (var i=0; i<this.paths.length; i++){
+		this.projectedPaths.push(this.paths[i].getPos().sub(camera.pos).applyRotation(camera.orientation));
+	}
+};
+
+Drawable.prototype.updateDrawCoords = function(camera, screenwidth, screenheight){
+	this.drawCoords = [];
+	for (var i=0; i<this.paths.length; i++){
+		this.drawCoords.push(this.projectedPaths[0].getScreenPos(camera, screenwidth, screenheight));
+	}
+};
+
+Drawable.prototype.updatePaths = function(){
+	for (var i=0; i<this.paths.length; i++){
+		this.paths[i].update()
+	}
+};
+
+Drawable.prototype.update = function(){
+	this.updatePaths();
+};
+
+Drawable.prototype.preDraw = function(){
+	this.shouldDraw = false;
+	console.log("unimplemented preDraw call on Drawable");
+	console.log(this);
+};
+
+Drawable.prototype.draw = function(){
+	console.log("unimplemented draw call on Drawable");
+	console.log(this);
+};
+
 var Sphere = function(path, radius, myColor) {
-	this.path = path;
+	this.paths = [path];
 	this.radius = radius;
 	this.myColor = myColor;
 };
-Sphere.prototype.update = function() {
-	this.path.update();
-};
+
+Sphere.prototype = new Drawable();
+Sphere.prototype.constructor = Sphere;
+
 Sphere.prototype.preDraw = function(camera, screenwidth, screenheight) {
-	this.projectedPos = this.path.getPos().sub(camera.pos).applyRotation(
-		camera.orientation);
-	this.shouldDraw = this.projectedPos.z > 0;
-	this.distanceFromCamera = this.projectedPos.z;
+	this.updateProjectedPaths(camera);
+	this.shouldDraw = this.projectedPaths[0].z > 0;
+	this.distanceFromCamera = this.projectedPaths[0].z;
+
 	if (this.shouldDraw) { //why waste time if we ain't gonna draw this
+		this.updateDrawCoords(camera, screenwidth, screenheight);
 		this.drawRadius = Number(camera.ratio * (screenwidth / 2.0) * this.radius /
 			this.distanceFromCamera);
-		var temp = this.projectedPos.getScreenPos(camera, screenwidth,
-			screenheight);
-		this.drawX = temp[0];
-		this.drawY = temp[1];
 	}
 };
 Sphere.prototype.draw = function(canvasContext) {
 	if (this.shouldDraw) {
 		canvasContext.beginPath();
-		canvasContext.arc(this.drawX, this.drawY, this.drawRadius, 0, 2 *
+		canvasContext.arc(this.drawCoords[0][0], this.drawCoords[0][1], this.drawRadius, 0, 2 *
 			Math.PI, false);
-		//console.log(this.drawX);
+		//console.log(this.drawCoords)
+		//console.log(this.drawCoords[0][0]);
 		//console.log(this.drawY);
 		canvasContext.fillStyle = this.myColor;
 		canvasContext.fill();
 	}
 };
+
 var Line = function(path1, path2, myColor, thickness) {
-	this.path1 = path1;
-	this.path2 = path2;
+	this.paths = [path1,path2];
 	this.myColor = myColor;
 	this.thickness = thickness;
 };
-Line.prototype.update = function() {
-	this.path1.update();
-	this.path2.update();
-};
+
+Line.prototype = new Drawable;
+Line.prototype.constructor = Line;
+
 Line.prototype.preDraw = function(camera, screenwidth, screenheight) {
-	this.projectedPos1 = this.path1.getPos().sub(camera.pos).applyRotation(
-		camera.orientation);
-	this.projectedPos2 = this.path2.getPos().sub(camera.pos).applyRotation(
-		camera.orientation);
-	this.shouldDraw = (this.projectedPos1.z > 0) || (this.projectedPos2.z >
-		0);
+	this.updateProjectedPaths(camera);
+	this.shouldDraw = (this.projectedPaths[0].z > 0) || (this.projectedPaths[1].z > 0);
 	if (this.shouldDraw) { //why waste time if we ain't gonna draw this
-		this.distanceFromCamera = (this.projectedPos1.z + this.projectedPos2
-			.z) / 2; //yolo average
-		this.projectedPos1 = ClipLineToPositive(this.projectedPos1, this.projectedPos2);
-		this.projectedPos2 = ClipLineToPositive(this.projectedPos2, this.projectedPos1);
-		var temp = this.projectedPos1.getScreenPos(camera, screenwidth,
+		this.distanceFromCamera = (this.projectedPaths[0].z + this.projectedPaths[1].z) / 2; //yolo average
+		this.projectedPaths[0] = ClipLineToPositive(this.projectedPaths[0], this.projectedPaths[1]);
+		this.projectedPos2 = ClipLineToPositive(this.projectedPaths[1], this.projectedPaths[0]);
+		var temp = this.projectedPaths[0].getScreenPos(camera, screenwidth,
 			screenheight);
 		this.draw1X = temp[0];
 		this.draw1Y = temp[1];
-		temp = this.projectedPos2.getScreenPos(camera, screenwidth,
+		temp = this.projectedPaths[1].getScreenPos(camera, screenwidth,
 			screenheight);
 		this.draw2X = temp[0];
 		this.draw2Y = temp[1];
 	}
 };
+
 Line.prototype.draw = function(canvasContext) {
 	if (this.shouldDraw) {
 		canvasContext.beginPath();
@@ -221,6 +268,7 @@ Line.prototype.draw = function(canvasContext) {
 		canvasContext.stroke();
 	}
 };
+
 var ClipLineToPositive = function(A, B) {
 	// A and B are both Quaternion objects
 	// if A is z-positive, returns A
@@ -292,13 +340,15 @@ canvas.addEventListener("mousemove", mouseMoveListener, false);
 canvas.addEventListener("mouseup", mouseUpListener, false);
 canvas.addEventListener("mousewheel", mouseScrollListener, false);
 var objects = [];
-for (var i = 0; i < 200; i++) {
+
+//stars
+/*for (var i = 0; i < 800; i++) {
 	objects.push(new Sphere(new ConstantPath(new Quaternion(0, (Math.random() -
 		0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() -
 		0.5) * 10)), 0.01, "white"));
-}
-objects.push(new Sphere(new ConstantPath(new Quaternion(0, 0, 0, 0)), 0.1,
-	"yellow"));
+}*/
+objects.push(new Sphere(new ConstantPath(new Quaternion(0, 0, 0, 0)),
+	0.1, "yellow"));
 /*
 for (var i=-1; i<=1; i+=2){
 	for (var j=-1; j<=1; j+=2){
@@ -308,6 +358,7 @@ for (var i=-1; i<=1; i+=2){
 		}
 	}
 }*/
+
 for (var i = -5; i <= 5; i += 10) {
 	for (var j = -5; j <= 5; j += 10) {
 		objects.push(new Line(new ConstantPath(new Quaternion(0, j, -i, i)),
@@ -337,10 +388,10 @@ for (var i = -4; i <= 4; i += 8) {
 		objects.push(new Line(new ConstantPath(new Quaternion(0, -i, i, j)),
 			new ConstantPath(new Quaternion(0, i, i, j)), "green", 2));
 		for (var k = 1; k <= 3; k++) {
-			objects[objects.length - k].path1.pos = objects[objects.length - k]
-				.path1.pos.applyRotation(new Quaternion(1, 1, 1, 0).normalize());
-			objects[objects.length - k].path2.pos = objects[objects.length - k]
-				.path2.pos.applyRotation(new Quaternion(1, 1, 1, 0).normalize());
+			objects[objects.length - k].paths[0].pos = objects[objects.length - k]
+				.paths[0].pos.applyRotation(new Quaternion(1, 1, 1, 0).normalize());
+			objects[objects.length - k].paths[1].pos = objects[objects.length - k]
+				.paths[1].pos.applyRotation(new Quaternion(1, 1, 1, 0).normalize());
 		}
 	}
 }
@@ -353,10 +404,10 @@ for (var i = -4; i <= 4; i += 8) {
 		objects.push(new Line(new ConstantPath(new Quaternion(0, -i, i, j)),
 			new ConstantPath(new Quaternion(0, i, i, j)), "yellow", 2));
 		for (var k = 1; k <= 3; k++) {
-			objects[objects.length - k].path1.pos = objects[objects.length - k]
-				.path1.pos.applyRotation(new Quaternion(1, 1, 0, 1).normalize());
-			objects[objects.length - k].path2.pos = objects[objects.length - k]
-				.path2.pos.applyRotation(new Quaternion(1, 1, 0, 1).normalize());
+			objects[objects.length - k].paths[0].pos = objects[objects.length - k]
+				.paths[0].pos.applyRotation(new Quaternion(1, 1, 0, 1).normalize());
+			objects[objects.length - k].paths[1].pos = objects[objects.length - k]
+				.paths[1].pos.applyRotation(new Quaternion(1, 1, 0, 1).normalize());
 		}
 	}
 }
@@ -391,6 +442,7 @@ for (var i = 0; i <= 100; i++) {
 		Math.random() - 0.5) * 0.2, distance * Math.sin(
 		theta)), rotation), 0.01, "grey"));
 }
+
 renderAll();
 var updating = window.setInterval(updateAll, 17);
 var rendering = window.setInterval(renderAll, 17);
