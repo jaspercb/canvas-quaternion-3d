@@ -190,7 +190,7 @@ Sphere.prototype.constructor = Sphere;
 Sphere.prototype.preDraw = function(camera, screenwidth, screenheight) {
 	this.updateProjectedPaths(camera);
 	this.shouldDraw = this.projectedPaths[0].z > 0;
-	this.distanceFromCamera = this.projectedPaths[0].z;
+	this.distanceFromCamera = this.projectedPaths[0].getSize();
 	if (this.shouldDraw) { //why waste time if we ain't gonna draw this
 		this.updateDrawCoords(camera, screenwidth, screenheight);
 		this.drawRadius = Number(camera.ratio * (screenwidth / 2.0) * this.radius / this.distanceFromCamera);
@@ -236,28 +236,35 @@ Line.prototype.draw = function(canvasContext) {
 	}
 };
 
-var Triangle = function(path1, path2, path3, myColor){
-	this.paths = [path1, path2, path3];
+var Polygon = function(paths, myColor){
+	this.paths = paths;
 	this.myColor = myColor;
 };
-Triangle.prototype = new Drawable;
-Triangle.prototype.constructor = Triangle;
-Triangle.prototype.preDraw = function(camera, screenwidth, screenheight){
+Polygon.prototype = new Drawable;
+Polygon.prototype.constructor = Polygon;
+Polygon.prototype.preDraw = function(camera, screenwidth, screenheight){
 	this.updateProjectedPaths(camera);
-	this.shouldDraw = (this.projectedPaths[0].z > 0) || (this.projectedPaths[1].z > 0) || (this.projectedPaths[2].z>0);
-	this.distanceFromCamera = (this.projectedPaths[0].z + this.projectedPaths[1].z + this.projectedPaths[2].z) / 3; //yolo average
-	
+	this.shouldDraw = false;
+	this.distanceFromCamera = 0;
+	for (var i=0; i<this.projectedPaths.length; i++) {
+		if (this.projectedPaths[i].z > 0) {
+			this.shouldDraw = true;
+		}
+		this.distanceFromCamera += this.projectedPaths[i].getSize();
+	}
+	this.distanceFromCamera/=this.projectedPaths.length;
+
 	if (this.shouldDraw) { //why waste time if we ain't gonna draw this
-		this.projectedPaths =[ClipLineToPositive(this.projectedPaths[0], this.projectedPaths[1]),
-			ClipLineToPositive(this.projectedPaths[1], this.projectedPaths[0]),
-			ClipLineToPositive(this.projectedPaths[1], this.projectedPaths[2]),
-			ClipLineToPositive(this.projectedPaths[2], this.projectedPaths[1]),
-			ClipLineToPositive(this.projectedPaths[2], this.projectedPaths[0]),
-			ClipLineToPositive(this.projectedPaths[0], this.projectedPaths[2])];
+		var oldProjectedPaths = this.projectedPaths;
+		this.projectedPaths =[];
+		for (var i=0; i<(oldProjectedPaths.length); i++) {
+			this.projectedPaths.push(ClipLineToPositive(oldProjectedPaths[i], oldProjectedPaths[(i+1)%(oldProjectedPaths.length)]));
+			this.projectedPaths.push(ClipLineToPositive(oldProjectedPaths[(i+1)%(oldProjectedPaths.length)], oldProjectedPaths[i]));
+		}
 		this.updateDrawCoords(camera, screenwidth, screenheight);
 	}
 };
-Triangle.prototype.draw = function(canvasContext) {
+Polygon.prototype.draw = function(canvasContext) {
 	if (this.shouldDraw) {
 		canvasContext.fillStyle = this.myColor;
 		canvasContext.beginPath();
@@ -306,7 +313,7 @@ var mouseMoveListener = function(e) {
 		if (e.shiftKey) {
 			var tmp = new Quaternion(0, -0.001 * dMouseX * cameraDistance, -0.001 * dMouseY *
 				cameraDistance, 0).applyRotation(camera.orientation.inverse());
-			console.log(tmp);
+			//console.log(tmp);
 			camera.pos = camera.pos.add(tmp);
 		} else {
 			//camera.rotateAroundDistance(new Quaternion (1, 0.002*dMouseY, -0.002*dMouseX, 0).normalize(), cameraDistance)
@@ -432,22 +439,43 @@ for (var i = 0; i <= 100; i++) {
 }
 
 
-objects.push(new Triangle(	new ConstantPath(new Quaternion(0, 0, 0, 2)),
+objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 2)),
 							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
-							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5))],
 							"white"));
-objects.push(new Triangle(	new ConstantPath(new Quaternion(0, 0, 0, 2)),
+objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 2)),
 							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5)),
-							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5))],
 							"blue"));
-objects.push(new Triangle(	new ConstantPath(new Quaternion(0, 0, 0, 2)),
+objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 2)),
 							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5)),
-							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5))],
 							"red"));
-objects.push(new Triangle(	new ConstantPath(new Quaternion(0, 0, 0, 2)),
+objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 2)),
 							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
-							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5))],
 							"green"));
+objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 3)),
+							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5))],
+							"blue"));
+objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 3)),
+							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5))],
+							"red"));
+objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 3)),
+							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5))],
+							"green"));
+objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 3)),
+							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5))],
+							"white"));
+/*objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5))],
+							"yellow"));*/
 renderAll();
 var updating = window.setInterval(updateAll, 17);
 var rendering = window.setInterval(renderAll, 17);
