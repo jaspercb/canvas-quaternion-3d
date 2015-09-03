@@ -159,7 +159,7 @@ Drawable.prototype.updateProjectedPaths = function(camera) {
 };
 Drawable.prototype.updateDrawCoords = function(camera, screenwidth, screenheight) {
 	this.drawCoords = [];
-	for (var i = 0; i < this.paths.length; i++) {
+	for (var i = 0; i < this.projectedPaths.length; i++) {
 		this.drawCoords.push(this.projectedPaths[i].getScreenPos(camera, screenwidth, screenheight));
 	}
 };
@@ -235,6 +235,41 @@ Line.prototype.draw = function(canvasContext) {
 		canvasContext.stroke();
 	}
 };
+
+var Triangle = function(path1, path2, path3, myColor){
+	this.paths = [path1, path2, path3];
+	this.myColor = myColor;
+};
+Triangle.prototype = new Drawable;
+Triangle.prototype.constructor = Triangle;
+Triangle.prototype.preDraw = function(camera, screenwidth, screenheight){
+	this.updateProjectedPaths(camera);
+	this.shouldDraw = (this.projectedPaths[0].z > 0) || (this.projectedPaths[1].z > 0) || (this.projectedPaths[2].z>0);
+	this.distanceFromCamera = (this.projectedPaths[0].z + this.projectedPaths[1].z + this.projectedPaths[2].z) / 3; //yolo average
+	
+	if (this.shouldDraw) { //why waste time if we ain't gonna draw this
+		this.projectedPaths =[ClipLineToPositive(this.projectedPaths[0], this.projectedPaths[1]),
+			ClipLineToPositive(this.projectedPaths[1], this.projectedPaths[0]),
+			ClipLineToPositive(this.projectedPaths[1], this.projectedPaths[2]),
+			ClipLineToPositive(this.projectedPaths[2], this.projectedPaths[1]),
+			ClipLineToPositive(this.projectedPaths[2], this.projectedPaths[0]),
+			ClipLineToPositive(this.projectedPaths[0], this.projectedPaths[2])];
+		this.updateDrawCoords(camera, screenwidth, screenheight);
+	}
+};
+Triangle.prototype.draw = function(canvasContext) {
+	if (this.shouldDraw) {
+		canvasContext.fillStyle = this.myColor;
+		canvasContext.beginPath();
+		canvasContext.moveTo(this.drawCoords[0][0], this.drawCoords[0][1]);
+		for (var i=1; i<this.projectedPaths.length; i++){
+			canvasContext.lineTo(this.drawCoords[i][0], this.drawCoords[i][1]);			
+		}
+		canvasContext.closePath();
+		canvasContext.fill();
+	}
+};
+
 var ClipLineToPositive = function(A, B) {
 	// A and B are both Quaternion objects
 	// if A is z-positive, returns A
@@ -395,6 +430,24 @@ for (var i = 0; i <= 100; i++) {
 			0, distance * Math.cos(theta), (Math.random() - 0.5) * 0.2, distance * Math.sin(theta)),
 		rotation), 0.01, "grey"));
 }
+
+
+objects.push(new Triangle(	new ConstantPath(new Quaternion(0, 0, 0, 2)),
+							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5)),
+							"white"));
+objects.push(new Triangle(	new ConstantPath(new Quaternion(0, 0, 0, 2)),
+							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5)),
+							"blue"));
+objects.push(new Triangle(	new ConstantPath(new Quaternion(0, 0, 0, 2)),
+							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5)),
+							"red"));
+objects.push(new Triangle(	new ConstantPath(new Quaternion(0, 0, 0, 2)),
+							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
+							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5)),
+							"green"));
 renderAll();
 var updating = window.setInterval(updateAll, 17);
 var rendering = window.setInterval(renderAll, 17);
