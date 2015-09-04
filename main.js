@@ -1,6 +1,16 @@
 var getRandomColor = function() { //source: http://stackoverflow.com/questions/1484506/random-color-generator-in-javascript
 	return '#' + Math.random().toString(16).substr(-6);
 };
+
+var getRandomColor = function() {
+	return "rgb("+Math.round(Math.random()*255)+","+Math.round(Math.random()*255)+","+Math.round(Math.random()*255)+")";
+}
+
+var shadeRGBColor = function(color, percent) { //source: http://stackoverflow.com/questions/5560248/programmatically-lighten-or-darken-a-hex-color-or-rgb-and-blend-colors
+    var f=color.split(","),t=percent<0?0:255,p=percent<0?percent*-1:percent,R=parseInt(f[0].slice(4)),G=parseInt(f[1]),B=parseInt(f[2]);
+    return "rgb("+(Math.round((t-R)*p)+R)+","+(Math.round((t-G)*p)+G)+","+(Math.round((t-B)*p)+B)+")";
+}
+
 var Quaternion = function(w, x, y, z) {
 	this.w = w;
 	this.x = x;
@@ -65,6 +75,16 @@ Quaternion.prototype.applyRotation = function(rotation) {
 	//}
 	return rotation.qMul(this.qMul(rotation.inverse()));
 };
+Quaternion.prototype.cross = function(other){
+	//takes cross product of imaginary components
+		return new Quaternion(0,this.y*other.z - this.z*other.y,
+							this.z*other.x-this.x*other.z,
+							this.x*other.y-this.y*other.x);
+};
+Quaternion.prototype.dot = function(other){
+	//takes dot product of all components
+		return this.z*other.z + this.x*other.x + this.y*other.y + this.z*other.z;
+}
 var Camera = function(pos, orientation, vel) {
 	this.pos = pos;
 	this.orientation = orientation;
@@ -242,6 +262,13 @@ var Polygon = function(paths, myColor){
 };
 Polygon.prototype = new Drawable;
 Polygon.prototype.constructor = Polygon;
+Polygon.prototype.getNormal = function(){
+	//returns normal vector to surface, based on first three elements in this.paths
+	var U=this.paths[1].getPos().sub(this.paths[0].getPos());
+	var V=this.paths[2].getPos().sub(this.paths[0].getPos());
+	return U.cross(V);
+}
+
 Polygon.prototype.preDraw = function(camera, screenwidth, screenheight){
 	this.updateProjectedPaths(camera);
 	this.shouldDraw = false;
@@ -262,11 +289,18 @@ Polygon.prototype.preDraw = function(camera, screenwidth, screenheight){
 			this.projectedPaths.push(ClipLineToPositive(oldProjectedPaths[(i+1)%(oldProjectedPaths.length)], oldProjectedPaths[i]));
 		}
 		this.updateDrawCoords(camera, screenwidth, screenheight);
+
+		this.shade = Math.max(this.getNormal().dot(camera.orientation), new Quaternion(0,0,0,0).sub(this.getNormal()).dot(camera.orientation));
+		console.log(this.shade)
+		//this.tmpColor = this.myColor;
+		//this.tmpColor = this.myColor
+		this.tmpColor = shadeRGBColor(this.myColor, -(this.shade));
+		//console.log(this.shade);
 	}
 };
 Polygon.prototype.draw = function(canvasContext) {
 	if (this.shouldDraw) {
-		canvasContext.fillStyle = this.myColor;
+		canvasContext.fillStyle = this.tmpColor;
 		canvasContext.beginPath();
 		canvasContext.moveTo(this.drawCoords[0][0], this.drawCoords[0][1]);
 		for (var i=1; i<this.projectedPaths.length; i++){
@@ -439,38 +473,41 @@ for (var i = 0; i <= 100; i++) {
 }
 
 
+var color = getRandomColor();
+var getRandomColor = function() {return color;}
+
 objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 2)),
 							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5))],
-							"white"));
+							getRandomColor()));
 objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 2)),
 							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5))],
-							"blue"));
+							getRandomColor()));
 objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 2)),
 							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5))],
-							"red"));
+							getRandomColor()));
 objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 2)),
 							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5))],
-							"green"));
+							getRandomColor()));
 objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 3)),
 							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5))],
-							"blue"));
+							getRandomColor()));
 objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 3)),
 							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5))],
-							"red"));
+							getRandomColor()));
 objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 3)),
 							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5))],
-							"green"));
+							getRandomColor()));
 objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0, 0, 3)),
 							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, -0.5, -0.5, 2.5))],
-							"white"));
+							getRandomColor()));
 /*objects.push(new Polygon(	[new ConstantPath(new Quaternion(0, 0.5, -0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, 0.5, 0.5, 2.5)),
 							new ConstantPath(new Quaternion(0, -0.5, 0.5, 2.5)),
